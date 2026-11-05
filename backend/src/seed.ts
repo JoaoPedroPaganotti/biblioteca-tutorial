@@ -12,3 +12,4 @@ try {
   console.error(error instanceof Error ? error.message : error);
   process.exitCode = 1;
 } finally { await sql.close(); redis?.close(); }
+
