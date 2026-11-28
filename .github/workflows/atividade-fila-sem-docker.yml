@@ -1,0 +1,62 @@
+name: Validar atividade da fila sem Docker
+
+on:
+  push:
+    branches: [validacao-fila-sem-docker]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  validar:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    env:
+      DATABASE_URL: postgres://biblioteca:biblioteca@127.0.0.1:5432/biblioteca_test
+      REDIS_URL: redis://127.0.0.1:6379
+      REDIS_PREFIX: biblioteca_test
+      EMBEDDING_PROVIDER: hash
+      GEMINI_API_KEY: ""
+      S3_ENDPOINT: http://127.0.0.1:9000
+      S3_ACCESS_KEY_ID: biblioteca
+      S3_SECRET_ACCESS_KEY: biblioteca-secreta
+      S3_BUCKET: biblioteca-test
+      TEST_QUEUE_URL: redis://127.0.0.1:6380
+      EMAIL_PROVIDER: memory
+      TEST_EMAIL_URL: http://127.0.0.1:8025
+      EVIDENCE_DIR: ${{ runner.temp }}/atividade-fila-evidencias
+    steps:
+      - uses: actions/checkout@v4
+      - uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: 1.4.4
+      - name: Iniciar PostgreSQL 18, Redis 8, RustFS e Mailpit nativos
+        run: bash .github/scripts/native-services.sh
+      - name: Instalar dependências do backend
+        working-directory: backend
+        run: bun install --frozen-lockfile
+      - name: Conferir fronteiras e tipos
+        working-directory: backend
+        run: |
+          bun run check-boundaries
+          bun run typecheck
+      - name: Executar a suíte completa original
+        working-directory: backend
+        run: |
+          set -o pipefail
+          bun test 2>&1 | tee "$EVIDENCE_DIR/suite.log"
+      - name: Compilar a interface usada pelo app
+        working-directory: frontend
+        run: |
+          bun install --frozen-lockfile
+          bun run build
+      - name: Conferir o worker real, Mailpit, espera, nova tentativa e duplicação
+        run: bun .github/scripts/verify-loan-receipts.ts
+      - name: Preservar logs e comprovante de envio
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: atividade-fila-evidencias
+          path: ${{ env.EVIDENCE_DIR }}
+          if-no-files-found: warn
