@@ -1,5 +1,6 @@
 #!/usr/bin/env bash
 set -euo pipefail
+trap 'redis-server --version || true; ls -la "$EVIDENCE_DIR"; tail -n 60 "$EVIDENCE_DIR"/*.log 2>/dev/null || true; sudo journalctl -u redis-server --no-pager -n 60 || true' ERR
 
 mkdir -p "$EVIDENCE_DIR" "$RUNNER_TEMP/fila-bin" "$RUNNER_TEMP/rustfs-data" "$RUNNER_TEMP/redis-queue"
 
@@ -25,12 +26,16 @@ sudo -u postgres psql -v ON_ERROR_STOP=1 -c "CREATE ROLE biblioteca LOGIN PASSWO
 sudo -u postgres createdb -O biblioteca biblioteca
 sudo -u postgres createdb -O biblioteca biblioteca_test
 
-sudo systemctl stop redis-server
-SEARCH_MODULE=$(find /usr/lib -name '*search*.so' -path '*redis*' -print -quit)
-MODULE_ARGS=()
-if [ -n "$SEARCH_MODULE" ]; then MODULE_ARGS=(--loadmodule "$SEARCH_MODULE"); fi
-redis-server --bind 127.0.0.1 --port 6379 --daemonize yes "${MODULE_ARGS[@]}" --logfile "$EVIDENCE_DIR/redis.log"
+sudo systemctl restart redis-server
 redis-server --bind 127.0.0.1 --port 6380 --daemonize yes --appendonly yes --maxmemory-policy noeviction --dir "$RUNNER_TEMP/redis-queue" --logfile "$EVIDENCE_DIR/fila.log"
+for port in 6379 6380; do
+  for attempt in $(seq 1 50); do
+    if redis-cli -p "$port" PING; then break; fi
+    sleep 0.2
+  done
+  redis-cli -p "$port" PING
+done
+sudo journalctl -u redis-server --no-pager -n 80 >"$EVIDENCE_DIR/redis.log"
 redis-cli -p 6379 MODULE LIST
 test -n "$(redis-cli -p 6379 --raw COMMAND INFO FT.CREATE)"
 redis-cli -p 6380 PING
