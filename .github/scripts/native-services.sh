@@ -16,6 +16,9 @@ sudo apt-get install -y postgresql-18 "redis=$REDIS_VERSION" "redis-server=$REDI
 while read -r version name rest; do
   sudo pg_ctlcluster "$version" "$name" stop || true
 done < <(pg_lsclusters --no-header)
+if [ ! -d /etc/postgresql/18/main ]; then
+  sudo pg_createcluster 18 main --port 5432
+fi
 sudo pg_conftool 18 main set port 5432
 sudo pg_ctlcluster 18 main start
 sudo -u postgres psql -v ON_ERROR_STOP=1 -c "CREATE ROLE biblioteca LOGIN PASSWORD 'biblioteca';"
@@ -24,10 +27,12 @@ sudo -u postgres createdb -O biblioteca biblioteca_test
 
 sudo systemctl stop redis-server
 SEARCH_MODULE=$(find /usr/lib -name '*search*.so' -path '*redis*' -print -quit)
-test -n "$SEARCH_MODULE"
-redis-server --bind 127.0.0.1 --port 6379 --daemonize yes --loadmodule "$SEARCH_MODULE" --logfile "$EVIDENCE_DIR/redis.log"
+MODULE_ARGS=()
+if [ -n "$SEARCH_MODULE" ]; then MODULE_ARGS=(--loadmodule "$SEARCH_MODULE"); fi
+redis-server --bind 127.0.0.1 --port 6379 --daemonize yes "${MODULE_ARGS[@]}" --logfile "$EVIDENCE_DIR/redis.log"
 redis-server --bind 127.0.0.1 --port 6380 --daemonize yes --appendonly yes --maxmemory-policy noeviction --dir "$RUNNER_TEMP/redis-queue" --logfile "$EVIDENCE_DIR/fila.log"
 redis-cli -p 6379 MODULE LIST
+test -n "$(redis-cli -p 6379 --raw COMMAND INFO FT.CREATE)"
 redis-cli -p 6380 PING
 
 curl -fsSL --retry 3 https://github.com/rustfs/rustfs/releases/download/1.0.5/rustfs-linux-x86_64-gnu-v1.0.5.zip -o "$RUNNER_TEMP/rustfs.zip"
