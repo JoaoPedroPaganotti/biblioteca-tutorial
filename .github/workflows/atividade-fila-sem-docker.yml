@@ -25,7 +25,7 @@ jobs:
       TEST_QUEUE_URL: redis://127.0.0.1:6380
       EMAIL_PROVIDER: memory
       TEST_EMAIL_URL: http://127.0.0.1:8025
-      EVIDENCE_DIR: ${{ github.workspace }}/.validation-evidence
+      EVIDENCE_DIR: ${{ github.workspace }}/validation-evidence
     steps:
       - uses: actions/checkout@v4
       - uses: oven-sh/setup-bun@v2

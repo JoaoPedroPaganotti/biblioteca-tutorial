@@ -64,5 +64,5 @@ for bucket in biblioteca biblioteca-test; do
 done
 printf 'PostgreSQL: '; psql --version
 printf 'Redis: '; redis-server --version
-"$RUNNER_TEMP/fila-bin/mailpit" --version
+"$RUNNER_TEMP/fila-bin/mailpit" version
 printf 'RustFS: 1.0.5\nBun: '; bun --version
