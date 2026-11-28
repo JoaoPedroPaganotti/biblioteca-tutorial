@@ -41,16 +41,16 @@ jobs:
         run: |
           bun run check-boundaries
           bun run typecheck
-      - name: Executar a suíte completa original
-        working-directory: backend
-        run: |
-          set -o pipefail
-          bun test 2>&1 | tee "$EVIDENCE_DIR/suite.log"
       - name: Compilar a interface usada pelo app
         working-directory: frontend
         run: |
           bun install --frozen-lockfile
           bun run build
+      - name: Executar a suíte completa original
+        working-directory: backend
+        run: |
+          set -o pipefail
+          bun test 2>&1 | tee "$EVIDENCE_DIR/suite.log"
       - name: Conferir o worker real, Mailpit, espera, nova tentativa e duplicação
         run: bun .github/scripts/verify-loan-receipts.ts
       - name: Preservar logs e comprovante de envio
